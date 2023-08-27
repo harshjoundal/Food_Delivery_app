@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import LoginBg from '../assets/img/LoginBg.jpg'
 import logo from '../assets/img/logo.png'
 import { LoginInput } from '../components'
@@ -6,16 +6,117 @@ import {FaEnvelope,FaLock} from "react-icons/fa"
 import {FcGoogle} from "react-icons/fc"
 import {motion} from 'framer-motion'
 import { buttonClick } from '../animations'
+import {getAuth, signInWithPopup,GoogleAuthProvider, createUserWithEmailAndPassword, signInWithEmailAndPassword} from "firebase/auth"
+import {app} from '../config/firebase.config'
+import { validateJWTToken } from '../api'
+import {useNavigate} from "react-router-dom"
+import { useDispatch, useSelector } from 'react-redux'
+import { setUserDetails } from '../context/actions/userActions'
+import { alertInfo, alertWarning } from '../context/actions/alertActions'
+
 
 
 const Login = () => {
+
+const navigate = useNavigate()
+const dispatch = useDispatch();
 
 const [userEmail,setUserEmail] = useState("")
 const [isSignUp,setIsSignUp] = useState(false)
 const[password,setPassword] = useState("")
 const[confirm_password,setConfirm_Password] = useState("")
-  
-  
+
+const firebaseAuth = getAuth(app)
+const provider = new GoogleAuthProvider()
+
+const user = useSelector(state => state.user)
+const alert = useSelector(state => state.alert)
+
+
+useEffect(() => {
+  if (user) {
+    navigate("/", { replace: true });
+  }
+}, [user]);
+
+const loginWithGoogle=async ()=>{
+    await signInWithPopup(firebaseAuth,provider)
+    .then(userCred =>{
+        firebaseAuth.onAuthStateChanged(cred => {
+            if(cred){
+                cred.getIdToken()
+                .then((token)=>{
+                    validateJWTToken(token)
+                    .then((data)=>{
+                        dispatch(setUserDetails(data));
+                    })
+                })
+                navigate("/", { replace: true });
+            }
+        })
+    })
+}
+
+const signUpwiEmailPassword =async ()=>{
+    if(userEmail === ""|| password=== "" || confirm_password=== ""){
+        alert("Req");
+        dispatch(alertInfo("Required fields should not be empty"));
+    }
+    else {
+        if(password === confirm_password){
+            await createUserWithEmailAndPassword(firebaseAuth,userEmail,password)
+            .then((userCred)=>{
+                firebaseAuth.onAuthStateChanged(cred => {
+                    if(cred){
+                        cred.getIdToken()
+                        .then((token)=>{
+                            validateJWTToken(token)
+                            .then((data)=>{
+                                dispatch(setUserDetails(data));
+                                setUserEmail("");
+                                setConfirm_Password("")
+                                setConfirm_Password("")
+                            })
+                            navigate("/", { replace: true });
+
+                        })
+                    }
+                })
+            })
+        }
+        else{
+            dispatch(alertWarning("Password doesn't match"));
+        }
+    }
+}
+
+const signInwithEmailPassword= async()=>{
+    if(userEmail !== "" && password !== ""){
+        await signInWithEmailAndPassword(
+          firebaseAuth,
+          userEmail,
+          password
+        ).then((userCred) => {
+          firebaseAuth.onAuthStateChanged((cred) => {
+            if (cred) {
+              cred.getIdToken().then((token) => {
+                validateJWTToken(token).then((data) => {
+                 dispatch(setUserDetails(data));
+                //   setUserEmail("");
+                //   setConfirm_Password("");
+                //   setConfirm_Password("");
+                });
+                navigate("/",{replace:true})
+              });
+            }
+          });
+        });
+    }
+    else{
+         dispatch(alertWarning("Password doesn't match"));
+    }
+}
+   
 return (
     <div className='w-screen h-screen relative overflow-hidden flex'>
         {/* Background image */}
@@ -23,7 +124,7 @@ return (
         {/* content box */}
         <div className='flex flex-col gap-6 items-center bg-lightOverlay w-[80%] md:w-508 h-full z-10 backdrop-blur-md p-4 px-4 pr-12'>
             {/* Top logo section */}
-            <div className='flex items-center justify-start gap-4 w-full'>
+            <div className='flex items-center justify-start gap-4 w-full cursor-pointer' onClick={()=>navigate('/')}>
                 <img src={logo} alt='' className='w-8'/>
                 <p className="text-headingColor font-semibold text-2xl">City</p>
             </div>
@@ -50,11 +151,15 @@ return (
                 {/* button section */}
                 {
                     isSignUp ?
-                    <motion.button {...buttonClick} className='w-full p-4 py-2 rounded-md bg-red-400 cursor-pointer text-white text-xl hover:bg-red-500 transition-all duration-150'>
+                    <motion.button 
+                        onClick={signUpwiEmailPassword}
+                    {...buttonClick} className='w-full p-4 py-2 rounded-md bg-red-400 cursor-pointer text-white text-xl hover:bg-red-500 transition-all duration-150'>
                         Sign Up
                     </motion.button>
                     :
-                    <motion.button {...buttonClick} className='w-full p-4 py-2 rounded-md bg-red-400 cursor-pointer text-white text-xl hover:bg-red-500 transition-all duration-150'>
+                    <motion.button
+                        onClick={signInwithEmailPassword}
+                    {...buttonClick} className='w-full p-4 py-2 rounded-md bg-red-400 cursor-pointer text-white text-xl hover:bg-red-500 transition-all duration-150'>
                         Sign In
                     </motion.button>
                 }
@@ -65,7 +170,9 @@ return (
                     <div className='w-24 h-[1px] bg-white'></div>
                 </div>
 
-                <motion.div {...buttonClick} className='flex items-center justify-center px-20 py-2 bg-lightOverlay backdrop-blur-md cursor-pointer rounded-3xl gap-4'>
+                <motion.div
+                onClick={loginWithGoogle}
+                {...buttonClick} className='flex items-center justify-center px-20 py-2 bg-lightOverlay backdrop-blur-md cursor-pointer rounded-3xl gap-4'>
                     <FcGoogle className='text-3xl'/>
                     <p className='capitalize text-base text-headingColor'>Sign in with Google</p>
                 </motion.div>
